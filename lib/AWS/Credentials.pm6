@@ -16,7 +16,7 @@ AWS::Credentials - Tools for loading AWS credentials
 
     my $access-key  = $credentials.access-key;
     my $secret-key  = $credentials.secret-key;
-    my $token       = $credentials.session-token;
+    my $token       = $credentials.token;
 
     # Or if you insist:
     my $hardcoded = AWS::Credentials.new(
