@@ -254,7 +254,7 @@ class AWS::Credentials::Provider::Resolver {
                 AWS::Credentials::Provider::FromEnv.new,
                 AWS::Credentials::Provider::SharedCredentials.new,
                 AWS::Credentials::Provider::SharedCredentials.new(
-                    :configuration-file-key(AWS::Credentials::Provider::SharedCredentials::ConfigFileKey::LoadFromConfig),
+                    :configuration-file-key(AWS::Credentials::Provider::SharedCredentials::LoadFromConfig),
                 ),
             ),
         );

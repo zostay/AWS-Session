@@ -149,9 +149,24 @@ Returns the credentials for the current profile.
 
 =head2 get-config-variable
 
-    method get-config-variable(Str $logical-name, Set :$methods?)
+    method get-config-variable(
+        Str $logical-name,
+        Bool :$from-instance = True,
+        Bool :$from-env = True,
+        Bool :$from-config = True,
+    )
 
 Loads the configuration named variable from the current configuration. This is loaded from the configuration file, environment, or whatever according to the default set in C<session-configuration>. Returns C<Nil> if no such configuration is defined for the given C<$logical-name>.
+
+The boolean flags are used to select which methods will be consulted for determining the variable value.
+
+=item from-instance When True, the local instance variable will be checked.
+
+=item from-env When True, the process environment variables will be searched for the value.
+
+=item from-config When True, the shared configuration file will be consulted for the value.
+
+The value will be pulled in the order listed above, with the first value found being the one chosen.
 
 =end pod
 
@@ -162,9 +177,8 @@ class Default {
     has &.converter;
 }
 
-sub IO-and-tilde($path) {
-    $path .= subst(/^ '~/' /, "$*HOME/");
-    $path.IO;
+our sub IO-and-tilde($path) {
+    $path.subst(/^ '~/' /, "$*HOME/").IO;
 }
 
 constant %session-variables = %(
@@ -212,19 +226,19 @@ has %!configuration-cache;
 method get-configuration(::?CLASS:D: $config-file? is copy, Bool :$reload = False) {
     $config-file //= self.get-config-variable(
         'config-file',
-        :methods(set(<instance env>)),
+        :!from-config
     );
 
     unless $reload {
         return $_ with %!configuration-cache{ $config-file };
     }
 
-    %!configuration-cache{ $config-file } = Config::INI::parse_file($config-file);
+    %!configuration-cache{ $config-file } = Config::INI::parse_file(~$config-file);
 }
 
 method get-credentials(::?CLASS:D: $credentials-file? is copy) {
     $credentials-file //= self.get-config-variable('credentials-file');
-    Config::INI::parse_file($credentials-file);
+    Config::INI::parse_file(~$credentials-file);
 }
 
 method get-profile-configuration(::?CLASS:D: Str:D $profile, :$config-file = $!config-file) {
@@ -254,30 +268,27 @@ method get-instance-variable(::?CLASS:D: Str $logical-name) {
 
 method get-config-variable(::?CLASS:D:
     Str $logical-name,
-    Set :$methods = set(<instance env config>),
+    Bool :$from-instance = True,
+    Bool :$from-env = True,
+    Bool :$from-config = True,
 ) {
     return unless %!session-configuration{ $logical-name } :exists;
 
     my $default = %!session-configuration{ $logical-name };
 
-    if 'instance' ∈ $methods && self.get-instance-variable($logical-name) -> $value {
+    if $from-instance && self.get-instance-variable($logical-name) -> $value {
         return $value;
     }
 
     my $value;
-    if 'env' ∈ $methods {
-        for $default.env-var -> $env-var {
-            with %*ENV{ $env-var } -> $val {
-                $value = $val;
-                last;
-            }
-        }
+    if $from-env {
+        $value = $default.env-var.map(
+            -> $env-var { %*ENV{ $env-var } }
+        ).first({ .defined });
     }
 
-    if 'config' ∈ $methods {
-        my $profile = self.get-config-variable('profile',
-            :methods(set(<instance env>)),
-        );
+    if $from-config && !$value.defined {
+        my $profile = self.get-config-variable('profile', :!from-config);
 
         my %profile = self.get-profile-configuration($profile);
 
