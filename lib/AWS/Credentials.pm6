@@ -105,7 +105,7 @@ For example, let's say you want to have some hardcoded credentials that used as 
 
 =end pod
 
-class AWS::Credentials {
+class AWS::Credentials:ver<0.1>:auth<github:zostay> {
     has Str $.access-key;
     has Str $.secret-key;
     has Str $.token;
