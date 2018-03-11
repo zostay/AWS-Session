@@ -212,7 +212,7 @@ class AWS::Credentials::Provider::SharedCredentials does AWS::Credentials::Provi
             %cred-config = $session.get-credentials;
         }
 
-        my $cred-profile = $!profile // $session.get-profile;
+        my $cred-profile = $!profile // $session.profile;
 
         return without %cred-config{ $cred-profile };
         return without any(%cred-config{ $cred-profile }{ @.access-key });
@@ -241,7 +241,7 @@ class AWS::Credentials::Provider::SharedCredentials does AWS::Credentials::Provi
 # role. This will at least require an HTTP client and a JSON parser to pull and
 # parse the metadata services.
 
-class AWS::Credentials::Provider::Resolver {
+class AWS::Credentials::Provider::Resolver does AWS::Credentials::Provider {
     has AWS::Credentials::Provider @.providers;
 
     method load(AWS::Session $session) returns AWS::Credentials {
@@ -261,10 +261,13 @@ class AWS::Credentials::Provider::Resolver {
     }
 }
 
-our sub AWS::Credentials::load-credentials(
+
+sub load-credentials(
     AWS::Session $session = AWS::Session.new,
     AWS::Credentials::Provider :$resolver = AWS::Credentials::Provider::Resolver.DEFAULT,
 ) returns AWS::Credentials is export {
     $resolver.load($session);
 }
+
+our constant &AWS::Credentials::load-credentials = &load-credentials;
 

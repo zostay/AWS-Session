@@ -171,9 +171,9 @@ The value will be pulled in the order listed above, with the first value found b
 =end pod
 
 class Default {
-    has $.config-file;
-    has @.env-var;
-    has $.default-value;
+    has $.config-file is rw;
+    has @.env-var is rw;
+    has $.default-value is rw;
     has &.converter;
 }
 
@@ -181,36 +181,38 @@ our sub IO-and-tilde($path) {
     $path.subst(/^ '~/' /, "$*HOME/").IO;
 }
 
-constant %session-variables = %(
-    profile => Default.new(:env-var<AWS_DEFAULT_PROFILE AWS_PROFILE>, :default-value<default>),
-    region => Default.new(:config-file<region>, :env-var<AWS_DEFAULT_REGION>),
-    data-path => Default.new(:config-file<data-path>, :env-var<AWS_DATA_PATH>, :converter(&IO-and-tilde)),
-    config-file => Default.new(:env-var<AWS_CONFIG_FILE>, :default-value<~/.aws/config>, :converter(&IO-and-tilde)),
-    ca-bundle => Default.new(:config-file<ca_bundle>, :env-var<AWS_CA_BUNDLE>, :converter(&IO-and-tilde)),
-    api-versions => Default.new(:config-file<api-version>, :default-value(%)),
+method DEFAULTS returns Hash {
+    %(
+        profile => Default.new(:env-var<AWS_DEFAULT_PROFILE AWS_PROFILE>, :default-value<default>),
+        region => Default.new(:config-file<region>, :env-var<AWS_DEFAULT_REGION>),
+        data-path => Default.new(:config-file<data-path>, :env-var<AWS_DATA_PATH>, :converter(&IO-and-tilde)),
+        config-file => Default.new(:env-var<AWS_CONFIG_FILE>, :default-value<~/.aws/config>, :converter(&IO-and-tilde)),
+        ca-bundle => Default.new(:config-file<ca_bundle>, :env-var<AWS_CA_BUNDLE>, :converter(&IO-and-tilde)),
+        api-versions => Default.new(:config-file<api-version>, :default-value(%)),
 
-    credentials-file => Default.new(
-        :env-var<AWS_SHARED_CREDENTIALS_FILE>,
-        :default-value<~/.aws/credentials>,
-        :converter(&IO-and-tilde),
-    ),
+        credentials-file => Default.new(
+            :env-var<AWS_SHARED_CREDENTIALS_FILE>,
+            :default-value<~/.aws/credentials>,
+            :converter(&IO-and-tilde),
+        ),
 
-    metadata-service-timeout => Default.new(
-        :config-file<metadata_service_timeout>,
-        :env-var<AWS_METADATA_SERVICE_TIMEOUT>,
-        :default-value(1),
-        :converter({.Int}),
-    ),
+        metadata-service-timeout => Default.new(
+            :config-file<metadata_service_timeout>,
+            :env-var<AWS_METADATA_SERVICE_TIMEOUT>,
+            :default-value(1),
+            :converter({.Int}),
+        ),
 
-    metadata-service-num-attempts => Default.new(
-        :config-file<metadata_service_num_attempts>,
-        :env-var<AWS_METADATA_SERVICE_NUM_ATTEMPTS>,
-        :default-value(1),
-        :converter({.Int}),
-    ),
-);
+        metadata-service-num-attempts => Default.new(
+            :config-file<metadata_service_num_attempts>,
+            :env-var<AWS_METADATA_SERVICE_NUM_ATTEMPTS>,
+            :default-value(1),
+            :converter({.Int}),
+        ),
+    );
+}
 
-has %.session-configuration = %session-variables;
+has %.session-configuration = AWS::Session.DEFAULTS;
 
 has Str $.profile is rw;
 has Str $.region is rw;
@@ -261,7 +263,7 @@ method get-current-credentials(::?CLASS:D:) {
 
 method get-instance-variable(::?CLASS:D: Str $logical-name) {
     with self.^attributes.first({ .name eq '$!' ~ $logical-name }) {
-        .get_value(self);
+        return .get_value(self);
     }
     Nil;
 }
@@ -307,12 +309,22 @@ method get-config-variable(::?CLASS:D:
     }
 }
 
-method profile(::?CLASS:D:) returns Str { self.get-config-variable('profile') }
-method region(::?CLASS:D:) returns Str { self.get-config-variable('region') }
-method data-path(::?CLASS:D:) returns IO::Path { self.get-config-variable('data-path') }
-method config-file(::?CLASS:D:) returns IO::Path { self.get-config-variable('config-file') }
-method ca-bundle(::?CLASS:D:) returns IO::Path { self.get-config-variable('ca-bundle') }
-method api-versions(::?CLASS:D:) returns Hash { self.get-config-variable('api-versions') }
-method credentials-file(::?CLASS:D:) returns IO::Path { self.get-config-variable('credentials-file') }
-method metadata-service-timeout(::?CLASS:D:) returns Int { self.get-config-variable('metadata-service-timeout') }
-method metadata-service-num-attempts(::?CLASS:D:) returns Int { self.get-config-variable('metadata-service-num-attempts') }
+method session-accessor(::?CLASS:D: $name) {
+    my $self := self;
+    Proxy.new(
+        FETCH => method () { $self.get-config-variable($name) },
+        STORE => method ($v) {
+            $self.^attributes.first({ .name eq '$!' ~ $name }).set_value($self, $v);
+        },
+    )
+}
+
+method profile(::?CLASS:D:) returns Str { self.session-accessor('profile') }
+method region(::?CLASS:D:) returns Str { self.session-accessor('region') }
+method data-path(::?CLASS:D:) returns IO::Path { self.session-accessor('data-path') }
+method config-file(::?CLASS:D:) returns IO::Path { self.session-accessor('config-file') }
+method ca-bundle(::?CLASS:D:) returns IO::Path { self.session-accessor('ca-bundle') }
+method api-versions(::?CLASS:D:) returns Hash { self.session-accessor('api-versions') }
+method credentials-file(::?CLASS:D:) returns IO::Path { self.session-accessor('credentials-file') }
+method metadata-service-timeout(::?CLASS:D:) returns Int { self.session-accessor('metadata-service-timeout') }
+method metadata-service-num-attempts(::?CLASS:D:) returns Int { self.session-accessor('metadata-service-num-attempts') }
