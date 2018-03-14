@@ -20,7 +20,9 @@
    "build-depends" : [],
    "auth" : "github:zostay",
    "source-url" : "git://github.com/zostay/AWS-Session.git",
-   "depends" : [],
+   "depends" : [
+       "Config::INI", "DateTime::Format::W3CDTF"
+   ],
    "name" : "AWS::Session",
    "authors" : [
       "Sterling Hanenkamp <hanenkamp@cpan.org>"
