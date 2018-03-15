@@ -1,3 +1,7 @@
-2018-03-11
+v0.2    2018-0315
+
+    * Fix a small type problem that breaks tests in certain cases.
+
+v0.1    2018-03-11
 
     * Initial release.

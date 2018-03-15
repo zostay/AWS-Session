@@ -105,7 +105,7 @@ For example, let's say you want to have some hardcoded credentials that used as 
 
 =end pod
 
-class AWS::Credentials:ver<0.1>:auth<github:zostay> {
+class AWS::Credentials:ver<0.2>:auth<github:zostay> {
     has Str $.access-key;
     has Str $.secret-key;
     has Str $.token;
@@ -163,7 +163,7 @@ class AWS::Credentials::Provider::FromEnv does AWS::Credentials::Provider {
     has Str @.token = 'AWS_SECURITY_TOKEN', 'AWS_SESSION_TOKEN';
     has Str @.expiry-time = 'AWS_CREDENTIAL_EXPIRATION';
 
-    method load-env(@names) { %*ENV{ @names }.first(*.defined) }
+    method load-env(@names) returns Str { %*ENV{ @names }.first(*.defined) }
 
     method load(AWS::Session $session) returns AWS::Credentials {
         my $access-key = self.load-env(@!access-key);
@@ -198,7 +198,7 @@ class AWS::Credentials::Provider::SharedCredentials does AWS::Credentials::Provi
     has Str $.profile;
     has ConfigFileKey $.configuration-file-key = LoadFromCredentials;
 
-    method load-cred(%cred, @names) { %cred{ @names }.first(*.defined) }
+    method load-cred(%cred, @names) returns Str { %cred{ @names }.first(*.defined) }
 
     method load(AWS::Session $session) returns AWS::Credentials {
         my %cred-config;
