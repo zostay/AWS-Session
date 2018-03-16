@@ -1,4 +1,4 @@
-unit class AWS::Session:ver<0.2>:auth<github:zostay>;
+unit class AWS::Session:ver<0.3>:auth<github:zostay>;
 use v6;
 
 use Config::INI;
