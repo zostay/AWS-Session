@@ -309,7 +309,7 @@ method get-config-variable(::?CLASS:D:
     }
 }
 
-method session-accessor(::?CLASS:D: $name) {
+method session-accessor(::?CLASS:D: $name) is rw {
     my $self := self;
     Proxy.new(
         FETCH => method () { $self.get-config-variable($name) },
@@ -319,12 +319,12 @@ method session-accessor(::?CLASS:D: $name) {
     )
 }
 
-method profile(::?CLASS:D:) returns Str { self.session-accessor('profile') }
-method region(::?CLASS:D:) returns Str { self.session-accessor('region') }
-method data-path(::?CLASS:D:) returns IO::Path { self.session-accessor('data-path') }
-method config-file(::?CLASS:D:) returns IO::Path { self.session-accessor('config-file') }
-method ca-bundle(::?CLASS:D:) returns IO::Path { self.session-accessor('ca-bundle') }
-method api-versions(::?CLASS:D:) returns Hash { self.session-accessor('api-versions') }
-method credentials-file(::?CLASS:D:) returns IO::Path { self.session-accessor('credentials-file') }
-method metadata-service-timeout(::?CLASS:D:) returns Int { self.session-accessor('metadata-service-timeout') }
-method metadata-service-num-attempts(::?CLASS:D:) returns Int { self.session-accessor('metadata-service-num-attempts') }
+method profile(::?CLASS:D:) is rw returns Str { self.session-accessor('profile') }
+method region(::?CLASS:D:) is rw returns Str { self.session-accessor('region') }
+method data-path(::?CLASS:D:) is rw returns IO::Path { self.session-accessor('data-path') }
+method config-file(::?CLASS:D:) is rw returns IO::Path { self.session-accessor('config-file') }
+method ca-bundle(::?CLASS:D:) is rw returns IO::Path { self.session-accessor('ca-bundle') }
+method api-versions(::?CLASS:D:) is rw returns Hash { self.session-accessor('api-versions') }
+method credentials-file(::?CLASS:D:) is rw returns IO::Path { self.session-accessor('credentials-file') }
+method metadata-service-timeout(::?CLASS:D:) is rw returns Int { self.session-accessor('metadata-service-timeout') }
+method metadata-service-num-attempts(::?CLASS:D:) is rw returns Int { self.session-accessor('metadata-service-num-attempts') }
