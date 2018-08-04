@@ -183,11 +183,11 @@ our sub IO-and-tilde($path) {
 
 method DEFAULTS returns Hash {
     %(
-        profile => Default.new(:env-var<AWS_DEFAULT_PROFILE AWS_PROFILE>, :default-value<default>),
-        region => Default.new(:config-file<region>, :env-var<AWS_DEFAULT_REGION>),
-        data-path => Default.new(:config-file<data-path>, :env-var<AWS_DATA_PATH>, :converter(&IO-and-tilde)),
-        config-file => Default.new(:env-var<AWS_CONFIG_FILE>, :default-value<~/.aws/config>, :converter(&IO-and-tilde)),
-        ca-bundle => Default.new(:config-file<ca_bundle>, :env-var<AWS_CA_BUNDLE>, :converter(&IO-and-tilde)),
+        profile      => Default.new(:env-var<AWS_DEFAULT_PROFILE AWS_PROFILE>, :default-value<default>),
+        region       => Default.new(:config-file<region>, :env-var<AWS_DEFAULT_REGION>),
+        data-path    => Default.new(:config-file<data-path>, :env-var<AWS_DATA_PATH>, :converter(&IO-and-tilde)),
+        config-file  => Default.new(:env-var<AWS_CONFIG_FILE>, :default-value<~/.aws/config>, :converter(&IO-and-tilde)),
+        ca-bundle    => Default.new(:config-file<ca_bundle>, :env-var<AWS_CA_BUNDLE>, :converter(&IO-and-tilde)),
         api-versions => Default.new(:config-file<api-version>, :default-value(%)),
 
         credentials-file => Default.new(
