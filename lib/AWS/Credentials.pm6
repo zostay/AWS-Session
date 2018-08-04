@@ -214,8 +214,8 @@ class AWS::Credentials::Provider::SharedCredentials does AWS::Credentials::Provi
 
         my $cred-profile = $!profile // $session.profile;
 
-        return without %cred-config{ $cred-profile };
-        return without any(%cred-config{ $cred-profile }{ @.access-key });
+        return Nil without %cred-config{ $cred-profile };
+        return Nil without any(%cred-config{ $cred-profile }{ @.access-key });
 
         my %cred = %cred-config{ $cred-profile };
         AWS::Credentials.new(

@@ -235,12 +235,14 @@ method get-configuration(::?CLASS:D: $config-file? is copy, Bool :$reload = Fals
         return $_ with %!configuration-cache{ $config-file };
     }
 
-    %!configuration-cache{ $config-file } = Config::INI::parse_file(~$config-file);
+    try {
+        %!configuration-cache{ $config-file } = Config::INI::parse_file(~$config-file);
+    } // ();
 }
 
 method get-credentials(::?CLASS:D: $credentials-file? is copy) {
     $credentials-file //= self.get-config-variable('credentials-file');
-    Config::INI::parse_file(~$credentials-file);
+    try { Config::INI::parse_file(~$credentials-file) } // ();
 }
 
 method get-profile-configuration(::?CLASS:D: Str:D $profile, :$config-file = $!config-file) {

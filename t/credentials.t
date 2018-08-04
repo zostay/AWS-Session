@@ -6,31 +6,54 @@ use AWS::Credentials;
 use lib 't/lib';
 use Test::AWS::Session;
 
-plan 6;
+plan 2;
 
-my $session = AWS::Session.new(
-    session-configuration => TEST-SESSION-DEFAULTS(),
-);
+subtest 'happy-credentials', {
+    my $session = AWS::Session.new(
+        session-configuration => TEST-SESSION-DEFAULTS(),
+    );
 
-{
-    my $credentials = load-credentials($session);
+    subtest 'default-profile', {
+        my $credentials = load-credentials($session);
 
-    isa-ok $credentials, AWS::Credentials;
+        isa-ok $credentials, AWS::Credentials;
 
-    is $credentials.access-key, 'AKEYDEFAULTDEFAULTDE';
-    is $credentials.secret-key, 'SecretSecretSecretSecretSecretSecretSecr';
+        is $credentials.access-key, 'AKEYDEFAULTDEFAULTDE';
+        is $credentials.secret-key, 'SecretSecretSecretSecretSecretSecretSecr';
+    }
+
+    $session.profile = 'fun';
+    #dd $session.profile;
+
+    subtest 'fun-profile', {
+        my $credentials = load-credentials($session);
+
+        isa-ok $credentials, AWS::Credentials;
+
+        is $credentials.access-key, 'AKEYFUNFUNFUNFUNFUNF';
+        is $credentials.secret-key, 'AlsoSecretSecretSecretSecretSecretSecret';
+    }
 }
 
-$session.profile = 'fun';
-#dd $session.profile;
+subtest 'sad-credentials', {
+    my $session = AWS::Session.new(
+        session-configuration => TEST-SESSION-SAD-DEFAULTS(),
+    );
 
-{
-    my $credentials = load-credentials($session);
+    subtest 'default-profile', {
+        my $credentials = load-credentials($session);
 
-    isa-ok $credentials, AWS::Credentials;
+        ok !$credentials.defined;
+    }
 
-    is $credentials.access-key, 'AKEYFUNFUNFUNFUNFUNF';
-    is $credentials.secret-key, 'AlsoSecretSecretSecretSecretSecretSecret';
+    $session.profile = 'fun';
+    #dd $session.profile;
+
+    subtest 'fun-profile', {
+        my $credentials = load-credentials($session);
+
+        ok !$credentials.defined;
+    }
 }
 
 done-testing;
