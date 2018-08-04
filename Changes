@@ -1,3 +1,8 @@
+v0.5    2018-08-03
+
+    * Bugfix #2: Missing configuration files in .aws no longer cause problems.
+      (HT: @MattOates)
+
 v0.4    2018-07-11
 
     * Bugfix #1: Mark mutators as is rw. (HT: @AlexDaniel)
