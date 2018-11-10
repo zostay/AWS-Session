@@ -1,5 +1,5 @@
-unit module Test::AWS::Session;
 use v6;
+unit module Test::AWS::Session;
 
 use AWS::Session;
 
