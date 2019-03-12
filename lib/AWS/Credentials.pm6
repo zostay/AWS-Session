@@ -94,7 +94,7 @@ For example, let's say you want to have some hardcoded credentials that used as 
     my $resolver = AWS::Credentials::Provider::Resolver.DEFAULT;
     $resolver.providers.push: class :: does AWS::Credentials::Provider {
         method load($s) returns AWS::Credentials {
-            AWS::Credentials.new(
+            self.static-credentials.new(
                 access-key => 'AKISUCHABADIDEATOHAV',
                 secret-key => 'PJaLYouReallyOughtNotToDoThisOrPainComes',
             );
@@ -105,29 +105,183 @@ For example, let's say you want to have some hardcoded credentials that used as 
 
 =end pod
 
-class AWS::Credentials:ver<0.5>:auth<github:zostay> {
+class X::AWS::Credentials is Exception {
+}
+
+class X::AWS::Credentials::RetriesExceeded is X::AWS::Credentials {
+    method message() { "too many retries attempted while retrieving credentials" }
+}
+
+class X::AWS::Credentials::Partial is X::AWS::Credentials {
+    has $.provider;
+    has Str $.credential-variable;
+
+    method message() {
+        "partial credentials found in $!provider.name(), missing: $!credential-variable"
+    }
+}
+
+class X::AWS::Credentials::StillExpired is X::AWS::Credentials {
+    method message() {
+        "credentials were refreshed, but the refreshed credentials are still expired"
+    }
+}
+
+# TODO This code probably belongs somewhere else, but it's short enough to
+# stick here for now.
+class AWS::InstanceMetadataFetcher {
+    my constant $DEFAULT-METADATA-SERVICE-TIMEOUT = 1;
+
+    my constant $METADATA-BASE-URL = 'http://169.254.169.254/';
+
+    has Int $.timeout = $DEFAULT-METADATA-SERVICE-TIMEOUT;
+    has Int $.num-attempts = 1;
+    has Str $.base-url = $METADATA-BASE-URL;
+    has %.env = %*ENV;
+    has Bool $!disabled = True;
+    has Str $.user-agent;
+
+    my constant $URL-PATH = 'latest/meta-data/iam/security-credentials/';
+    my constant @REQUIRED-CREDENTIAL-FIELDS = <
+        AccessKeyId SecretAccessKey Token Expiration
+    >;
+
+    submethod TWEAK() {
+        my $disabled = %!env<AWS_EC2_METADATA_DISABLED> // 'false';
+        $!disabled = ($disabled eq 'true');
+    }
+
+    use HTTP::UserAgent;
+    has $!ua = HTTP::UserAgent.new;
+
+    my role HasTheJSON {
+        use JSON::Fast;
+
+        has $!_json;
+        has $!_valid;
+        method json-content(--> Any) {
+            return $!_json with $!_valid;
+            $!_json = try from-json(self.content);
+            $!_valid = $!_json.defined;
+            $!_json;
+        }
+
+        method has-valid-json(--> Bool:D) {
+            return $!_valid with $!_valid;
+            self.json-content;
+            $!_valid;
+        }
+    }
+
+    method !default-retrier(--> Callable) {
+        -> { .code != 200 || !.content }
+    }
+
+    method !needs-retry-for-role-name(--> Callable) {
+        -> { .code != 200 || !.content }
+    }
+
+    method !invalid-json($response) {
+        $response does HasTheJSON unless $response ~~ HasTheJSON;
+        $response.has-valid-json;
+    }
+
+    method !needs-retry-for-credentials(--> Callable) {
+        -> { .code != 200 || !.content || self!invalid-json($_) }
+    }
+
+    method !get-request(Str :$url, :&retrier is copy --> HTTP::Response) {
+        if $!disabled {
+            warn "Access to EC2 metadata has been disabled.";
+            die X::AWS::Credentials::RetriesExceeded.new;
+        }
+
+        &retrier = self!default-retrier without &retrier;
+
+        my $req-url = $!base-url ~ $url;
+        my %headers;
+        %headers<User-Agent> = $_ with $!user-agent;
+
+        my $response;
+        for ^$!num-attempts {
+            $response = $!ua.get($req-url, |%headers);
+            return $response unless retrier($response);
+        }
+
+        die X::AWS::Credentials::RetriesExceeded.new;
+    }
+
+    method !get-iam-role(--> Str:D) {
+        self!get-request(
+            url     => $URL-PATH,
+            retrier => self!needs-retry-for-role-name,
+        ).content;
+    }
+
+    method !get-credentials($role-name --> Hash) {
+        my $r = self!get-request(
+            url     => $URL-PATH ~ $role-name,
+            retrier => self!needs-retry-for-credentials
+        );
+        $r does HasTheJSON unless $r ~~ HasTheJSON;
+        $r.json-content;
+    }
+
+    method retrieve-iam-role-credentials(--> Hash) {
+        try {
+            my $role-name   = self!get-iam-role;
+            my %credentials = self!get-credentials($role-name);
+
+            unless all(@REQUIRED-CREDENTIAL-FIELDS) ∈ %credentials {
+                warn "Error response recieved when retrieving credentials: %credentials.perl()"
+                    if all(<Code Message>) ∈ %credentials;
+
+                return %();
+            }
+
+            CATCH {
+                when X::AWS::Credentials::RetriesExceeded {
+                    warn "Max number of attempts exceeded ($!num-attempts) when attempting to retrieve data from metadata service.";
+                    return %();
+                }
+            }
+
+            %(
+                role-name   => $role-name,
+                access-key  => %credentials<AccessKeyId>,
+                secret-key  => %credentials<SecretAccessKey>,
+                token       => %credentials<token>,
+                expiry-time => %credentials<Expiration>,
+            )
+        }
+    }
+}
+
+role AWS::Credentials:ver<0.5>:auth<github:zostay> {
     has Str $.access-key;
     has Str $.secret-key;
     has Str $.token;
 }
 
-class AWS::Credentials::Refreshable is AWS::Credentials {
+class AWS::Credentials::Refreshable does AWS::Credentials {
     # Default number of seconds ahead of expiration where we want to start
     # trying to refresh by default, but we are not willing to block yet.
-    has Duration $.advisory-refresh-timeout .= new(60 * 15);
+    has Duration $.advisory-refresh-timeout is rw .= new(60 * 15);
 
     # Default number of seconds ahead of expiration where we want to start
     # trying to force refresh and are willing to block to make sure it happens.
-    has Duration $.mandatory-refresh-timeout .= new(60 * 10);
+    has Duration $.mandatory-refresh-timeout is rw .= new(60 * 10);
 
     has DateTime $.expiry-time;
 
+    has &.refresh-using is required;
+
     method seconds-remaining(::?CLASS:D:) returns Duration {
-        $!expiry-time - DateTime.now.posix
+        $!expiry-time - DateTime.now
     }
 
     method refresh-needed(::?CLASS:D:
-        :$refresh-in = $.advisory-refresh-timeout,
+        $refresh-in = $.mandatory-refresh-timeout,
     ) returns Bool {
 
         # No expiry time? We will not refresh.
@@ -140,20 +294,45 @@ class AWS::Credentials::Refreshable is AWS::Credentials {
         return True;
     }
 
-    method refresh(::?CLASS:D:) {
-        return unless self.refresh-needed(:refresh-in($!advisory-refresh-timeout));
+    method refresh(::?CLASS:D: :$is-mandatory = False) {
+        return unless self.refresh-needed($!advisory-refresh-timeout);
 
-        # TODO Credential refresh should be implemented, yo.
-        warn "REFRESH IS NOT IMPLEMENTED!";
+        my %metadata;
+        try {
+            %metadata = &.refresh-using.();
+
+            CATCH {
+                default {
+                    my $mandatory = $is-mandatory ?? 'mandatory' !! 'advisory';
+
+                    warn "Refreshing temporary credentials failed during $mandatory refresh period.";
+
+                    .rethrow if $is-mandatory;
+                    return;
+                }
+            }
+        }
+
+        $!access-key  = %metadata<access-key>;
+        $!secret-key  = %metadata<secret-key>;
+        $!token       = %metadata<token>;
+        $!expiry-time = %metadata<expiry-time>;
+
+        if $.refresh-needed {
+            die X::AWS::Credentials::StillExpired.new;
+        }
     }
 
-    method access-key(::?CLASS:D:)  { self.refresh; self.AWS::Credentials::access-key }
-    method secret-key(::?CLASS:D:)  { self.refresh; self.AWS::Credentials::secret-key }
-    method token(::?CLASS:D:)       { self.refresh; self.AWS::Credentials::token }
+    method access-key(::?CLASS:D:)  { self.refresh; $!access-key }
+    method secret-key(::?CLASS:D:)  { self.refresh; $!secret-key }
+    method token(::?CLASS:D:)       { self.refresh; $!token }
     method expiry-time(::?CLASS:D:) { self.refresh; $!expiry-time }
 }
 
 role AWS::Credentials::Provider {
+    method static-credentials() { AWS::Credentials }
+    method refreshable-credentials() { AWS::Credentials::Refreshable }
+
     method load(AWS::Session $session) returns AWS::Credentials { ... }
 }
 
@@ -163,26 +342,50 @@ class AWS::Credentials::Provider::FromEnv does AWS::Credentials::Provider {
     has Str @.token = 'AWS_SECURITY_TOKEN', 'AWS_SESSION_TOKEN';
     has Str @.expiry-time = 'AWS_CREDENTIAL_EXPIRATION';
 
-    method load-env(@names) returns Str { %*ENV{ @names }.first(*.defined) }
+    method env-map() returns Hash:D {
+        %(:@!access-key, :@!secret-key, :@!token, :@!expiry-time)
+    }
+
+    multi method load-env('expiry-time', @names) returns DateTime {
+        my $expiry-time-str = self.load-env(*, @names);
+
+        return Nil unless $expiry-time-str;
+
+        DateTime.new($expiry-time-str);
+    }
+
+    multi method load-env($, @names) returns Str {
+        %*ENV{ @names }.first(*.defined)
+    }
+
+    method !create-credentials-fetcher($self:) {
+        -> {
+            % = $.env-map.map({
+                my $v = $self.load-env(.key, .value);
+                die X::AWS::Credentials::Partial.new(
+                    provider            => self.WHAT,
+                    credential-variable => .key,
+                ) without $v;
+                .key => $v;
+            })
+        }
+    }
 
     method load(AWS::Session $session) returns AWS::Credentials {
-        my Str $access-key = self.load-env(@!access-key);
+        my Str $access-key = self.load-env('access-key', @!access-key);
         return without $access-key;
 
-        my Str $secret-key = self.load-env(@!secret-key);
-        my Str $token      = self.load-env(@!token);
+        my Str $secret-key = self.load-env('secret-key', @!secret-key);
+        my Str $token      = self.load-env('token', @!token);
 
-        with self.load-env(@!expiry-time) -> $expiry-time-str {
-            use DateTime::Format::W3CDTF;
-            my $df = DateTime::Format::W3CDTF.new;
-
-            my $expiry-time = $df.parse($expiry-time-str);
-            AWS::Credentials::Refreshable.new(
+        with self.load-env('expiry-time', @!expiry-time) -> $expiry-time {
+            self.refreshable-credentials.new(
                 :$expiry-time, :$access-key, :$secret-key, :$token,
+                refresh-using => self!create-credentials-fetcher,
             );
         }
         else {
-            AWS::Credentials.new(:$access-key, :$secret-key, :$token);
+            self.static-credentials.new(:$access-key, :$secret-key, :$token);
         }
     }
 }
@@ -218,7 +421,7 @@ class AWS::Credentials::Provider::SharedCredentials does AWS::Credentials::Provi
         return Nil without any(%cred-config{ $cred-profile }{ @.access-key });
 
         my %cred = %cred-config{ $cred-profile };
-        AWS::Credentials.new(
+        self.static-credentials.new(
             access-key => self.load-cred(%cred, @!access-key),
             secret-key => self.load-cred(%cred, @!secret-key),
             token      => self.load-cred(%cred, @!token),
@@ -271,3 +474,4 @@ sub load-credentials(
 
 our constant &AWS::Credentials::load-credentials = &load-credentials;
 
+# vim: sts=4 ts=4 sw=4

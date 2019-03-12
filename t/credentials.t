@@ -16,7 +16,7 @@ subtest 'happy-credentials', {
     subtest 'default-profile', {
         my $credentials = load-credentials($session);
 
-        isa-ok $credentials, AWS::Credentials;
+        does-ok $credentials, AWS::Credentials;
 
         is $credentials.access-key, 'AKEYDEFAULTDEFAULTDE';
         is $credentials.secret-key, 'SecretSecretSecretSecretSecretSecretSecr';
@@ -28,7 +28,7 @@ subtest 'happy-credentials', {
     subtest 'fun-profile', {
         my $credentials = load-credentials($session);
 
-        isa-ok $credentials, AWS::Credentials;
+        does-ok $credentials, AWS::Credentials;
 
         is $credentials.access-key, 'AKEYFUNFUNFUNFUNFUNF';
         is $credentials.secret-key, 'AlsoSecretSecretSecretSecretSecretSecret';

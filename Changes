@@ -11,6 +11,8 @@
       attributes cannot be inherited.
     * More tests have been added. Previously, very, very little was actually
       tested.
+    * Uses Perl built-ins for formatting and parsing W3C dates rather than the
+      now no longer maintained DateTime::Format::W3CDTF.
 
 v0.7	2018-11-10
 
