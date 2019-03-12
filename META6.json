@@ -1,10 +1,10 @@
 {
   "auth": "github:zostay",
   "tags": [
-    
+
   ],
   "resources": [
-    
+
   ],
   "version": "0.7",
   "perl": "6.c",
@@ -34,10 +34,9 @@
     "source": "git://github.com/zostay/AWS-Session.git"
   },
   "build-depends": [
-    
+
   ],
   "depends": [
-    "Config::INI",
-    "DateTime::Format::W3CDTF"
+    "Config::INI"
   ]
 }
