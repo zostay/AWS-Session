@@ -1,43 +1,43 @@
 {
-  "auth": "github:zostay",
-  "tags": [
-
-  ],
   "resources": [
-
+    
   ],
-  "version": "0.7",
-  "perl": "6.c",
-  "license": "Artistic-2.0",
   "test-depends": [
     "Test",
     "Test::META"
   ],
-  "description": "Tools for managing AWS configuration and credentials",
   "name": "AWS::Session",
-  "meta-version": "0",
-  "source-url": "git://github.com/zostay/AWS-Session.git",
-  "authors": [
-    "Sterling Hanenkamp <hanenkamp@cpan.org>"
+  "tags": [
+    
   ],
-  "provides": {
-    "AWS::Credentials::Provider": "lib/AWS/Credentials.pm6",
-    "AWS::Credentials": "lib/AWS/Credentials.pm6",
-    "AWS::Credentials::Provider::FromEnv": "lib/AWS/Credentials.pm6",
-    "AWS::Credentials::Refreshable": "lib/AWS/Credentials.pm6",
-    "AWS::Session::Default": "lib/AWS/Session.pm6",
-    "AWS::Credentials::Provider::SharedCredentials": "lib/AWS/Credentials.pm6",
-    "AWS::Credentials::Provider::Resolver": "lib/AWS/Credentials.pm6",
-    "AWS::Session": "lib/AWS/Session.pm6"
-  },
-  "support": {
-    "source": "git://github.com/zostay/AWS-Session.git"
-  },
+  "license": "Artistic-2.0",
+  "perl": "6.c",
   "build-depends": [
-
+    
   ],
   "depends": [
     "Config::INI",
     "HTTP::UserAgent"
-  ]
+  ],
+  "authors": [
+    "Sterling Hanenkamp <hanenkamp@cpan.org>"
+  ],
+  "source-url": "git://github.com/zostay/AWS-Session.git",
+  "description": "Tools for managing AWS configuration and credentials",
+  "support": {
+    "source": "git://github.com/zostay/AWS-Session.git"
+  },
+  "provides": {
+    "AWS::Credentials::Refreshable": "lib/AWS/Credentials.pm6",
+    "AWS::Credentials::Provider::SharedCredentials": "lib/AWS/Credentials.pm6",
+    "AWS::Session::Default": "lib/AWS/Session.pm6",
+    "AWS::Credentials::Provider::FromEnv": "lib/AWS/Credentials.pm6",
+    "AWS::Credentials": "lib/AWS/Credentials.pm6",
+    "AWS::Credentials::Provider::Resolver": "lib/AWS/Credentials.pm6",
+    "AWS::Credentials::Provider": "lib/AWS/Credentials.pm6",
+    "AWS::Session": "lib/AWS/Session.pm6"
+  },
+  "version": "0.8.0",
+  "auth": "github:zostay",
+  "meta-version": "0"
 }
