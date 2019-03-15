@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 v0.8.0	2019-03-15
 
     * A provider that pulls credentials from the instance metadata server has
