@@ -121,6 +121,140 @@ class X::AWS::Credentials::Partial is X::AWS::Credentials {
     }
 }
 
+class X::AWS::Credentials::StillExpired is X::AWS::Credentials {
+    method message() {
+        "credentials were refreshed, but the refreshed credentials are still expired"
+    }
+}
+
+# TODO This code probably belongs somewhere else, but it's short enough to
+# stick here for now.
+class AWS::InstanceMetadataFetcher {
+    my constant $DEFAULT-METADATA-SERVICE-TIMEOUT = 1;
+
+    my constant $METADATA-BASE-URL = 'http://169.254.169.254/';
+
+    has Int $.timeout = $DEFAULT-METADATA-SERVICE-TIMEOUT;
+    has Int $.num-attempts = 1;
+    has Str $.base-url = $METADATA-BASE-URL;
+    has %.env = %*ENV;
+    has Bool $!disabled = True;
+    has Str $.user-agent;
+
+    my constant $URL-PATH = 'latest/meta-data/iam/security-credentials/';
+    my constant @REQUIRED-CREDENTIAL-FIELDS = <
+        AccessKeyId SecretAccessKey Token Expiration
+    >;
+
+    submethod TWEAK() {
+        my $disabled = %!env<AWS_EC2_METADATA_DISABLED> // 'false';
+        $!disabled = ($disabled eq 'true');
+    }
+
+    use HTTP::UserAgent;
+    has $!ua = HTTP::UserAgent.new;
+
+    my role HasTheJSON {
+        use JSON::Fast;
+
+        has $!_json;
+        has $!_valid;
+        method json-content(--> Any) {
+            return $!_json with $!_valid;
+            $!_json = try from-json(self.content);
+            $!_valid = $!_json.defined;
+            $!_json;
+        }
+
+        method has-valid-json(--> Bool:D) {
+            return $!_valid with $!_valid;
+            $!_valid = self.json-content.defined;
+        }
+    }
+
+    method default-retrier(--> Callable) {
+        -> $_ { .code != 200 || !.content }
+    }
+
+    method needs-retry-for-role-name(--> Callable) {
+        -> $_ { .code != 200 || !.content }
+    }
+
+    method invalid-json($response) {
+        $response does HasTheJSON unless $response ~~ HasTheJSON;
+        $response.has-valid-json;
+    }
+
+    method needs-retry-for-credentials(--> Callable) {
+        -> $_ { .code != 200 || !.content || !self.invalid-json($_) }
+    }
+
+    method get-request(Str :$url, :retrier(&needs-retry) is copy --> HTTP::Response) {
+        if $!disabled {
+            warn "Access to EC2 metadata has been disabled.";
+            die X::AWS::Credentials::RetriesExceeded.new;
+        }
+
+        &needs-retry = self.default-retrier without &needs-retry;
+
+        my $req-url = $!base-url ~ $url;
+        my %headers;
+        %headers<User-Agent> = $_ with $!user-agent;
+
+        my $response;
+        for ^$!num-attempts {
+            $response = $!ua.get($req-url, |%headers);
+            return $response unless needs-retry($response);
+        }
+
+        die X::AWS::Credentials::RetriesExceeded.new;
+    }
+
+    method get-iam-role(--> Str:D) {
+        self.get-request(
+            url     => $URL-PATH,
+            retrier => self.needs-retry-for-role-name,
+        ).content;
+    }
+
+    method get-credentials($role-name --> Hash) {
+        my $r = self.get-request(
+            url     => $URL-PATH ~ $role-name,
+            retrier => self.needs-retry-for-credentials
+        );
+        $r does HasTheJSON unless $r ~~ HasTheJSON;
+        $r.json-content;
+    }
+
+    method retrieve-iam-role-credentials(--> Hash) {
+        try {
+            my $role-name   = self.get-iam-role;
+            my %credentials = self.get-credentials($role-name);
+
+            unless all(@REQUIRED-CREDENTIAL-FIELDS) ∈ %credentials {
+                warn "Error response recieved when retrieving credentials: %credentials.perl()"
+                    if all(<Code Message>) ∈ %credentials;
+
+                return %();
+            }
+
+            CATCH {
+                when X::AWS::Credentials::RetriesExceeded {
+                    warn "Max number of attempts exceeded ($!num-attempts) when attempting to retrieve data from metadata service.";
+                    return %();
+                }
+            }
+
+            %(
+                role-name   => $role-name,
+                access-key  => %credentials<AccessKeyId>,
+                secret-key  => %credentials<SecretAccessKey>,
+                token       => %credentials<Token>,
+                expiry-time => DateTime.new(%credentials<Expiration>),
+            )
+        }
+    }
+}
 
 role AWS::Credentials:ver<0.5>:auth<github:zostay> {
     has Str $.access-key;
@@ -294,6 +428,23 @@ class AWS::Credentials::Provider::SharedCredentials does AWS::Credentials::Provi
     }
 }
 
+class AWS::Credentials::Provider::InstanceMetadataProvider does AWS::Credentials::Provider {
+    has $.role-fetcher = AWS::InstanceMetadataFetcher.new;
+
+    method load(AWS::Session $session) returns AWS::Credentials {
+        my %metadata = $.role-fetcher.retrieve-iam-role-credentials;
+        return Nil unless %metadata;
+
+        self.refreshable-credentials.new(
+            |%metadata,
+            refresh-using => {
+                $.role-fetcher.retrieve-iam-role-credentials;
+            },
+        );
+
+    }
+}
+
 # TODO AWS::Credentials::Provider::AssumeRoleProvider
 #
 # This has not been implemented because it requires some sort of AWS API client
@@ -301,13 +452,11 @@ class AWS::Credentials::Provider::SharedCredentials does AWS::Credentials::Provi
 # or to send me a PR could either create a one-off API handler for that or could
 # look into building a larger implementation of the STS API.
 #
+# TODO AWS::Credentials::Provider::FromProcess
 # TODO AWS::Credentials::Provider::ContainerProvider
-# TODO AWS::Credentials::Provider::InstanceMetadataProvider
 #
-# Something like these needs to exist too, so that it's easy to pull the AWS
-# credentials from the instance using the default instance role or the container
-# role. This will at least require an HTTP client and a JSON parser to pull and
-# parse the metadata services.
+# Something like these and maybe others found in botocore credentials.py should
+# exist too.
 
 class AWS::Credentials::Provider::Resolver does AWS::Credentials::Provider {
     has AWS::Credentials::Provider @.providers;
@@ -324,6 +473,7 @@ class AWS::Credentials::Provider::Resolver does AWS::Credentials::Provider {
                 AWS::Credentials::Provider::SharedCredentials.new(
                     :configuration-file-key(AWS::Credentials::Provider::SharedCredentials::LoadFromConfig),
                 ),
+                AWS::Credentials::Provider::InstanceMetadataProvider.new,
             ),
         );
     }
